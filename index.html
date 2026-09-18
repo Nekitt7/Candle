@@ -450,30 +450,31 @@ function frac(){ // 1 = целая свеча, 0 = догорела
 /* ==========================================================
    4. ЗВУК
    ========================================================== */
-var snd  = document.getElementById("snd");    // музыка
-var tick = document.getElementById("tick");   // тикание, пока свеча горит и течёт
+var snd  = document.getElementById("snd");    // музыка — пока свеча ГОРИТ
+var tick = document.getElementById("tick");   // тикание — когда свеча ПОГАСЛА, по кругу
 var audioBlocked = false;
 
 // НАСТРОЙКА ГРОМКОСТИ: 0 — выключено совсем, 1 — максимум.
-snd.volume  = 0.40;   // музыка потише, чтобы не спорила с тиканьем
-tick.volume = 0.55;   // тикание
+snd.volume  = 0.55;   // музыка во время горения
+tick.volume = 0.70;   // тикание после того, как свеча догорела
 
+function playTrack(a, on){
+  if (on){
+    if (a.volume <= 0) return;                // дорожку с громкостью 0 не трогаем
+    var p = a.play();
+    if (p && p.catch) p.catch(function(){
+      audioBlocked = true;
+      showHint("НАЖМИ ЛЮБУЮ КНОПКУ ДЛЯ ЗВУКА");
+    });
+  } else {
+    try{ a.pause(); }catch(e){}
+  }
+}
 var TRACKS = [snd, tick];
 function syncSound(){
-  var on = S.sound && S.running && !S.finished;
-  for (var i = 0; i < TRACKS.length; i++){
-    var a = TRACKS[i];
-    if (on){
-      if (a.volume <= 0) continue;            // дорожку с громкостью 0 не трогаем
-      var p = a.play();
-      if (p && p.catch) p.catch(function(){
-        audioBlocked = true;
-        showHint("НАЖМИ ЛЮБУЮ КНОПКУ ДЛЯ ЗВУКА");
-      });
-    } else {
-      try{ a.pause(); }catch(e){}
-    }
-  }
+  // музыка — только пока свеча горит; тикание — только после того, как догорела
+  playTrack(snd,  S.sound && S.running && !S.finished);
+  playTrack(tick, S.sound && S.finished);
 }
 document.addEventListener("pointerdown", function once(){
   if (audioBlocked){ audioBlocked = false; syncSound(); showHint(""); }
@@ -937,6 +938,7 @@ function finish(){
   for (var i = 0; i < 16; i++){
     setTimeout(function(){ spawnSmoke(CENTER - 1 + (Math.random()*3|0), BASE_Y - 2); }, i * 90);
   }
+  try{ tick.currentTime = 0; }catch(e){}   // тикание всегда с начала
   save(); syncSound(); updateUI(); hapticNotify();
 }
 function resetAll(){
@@ -1086,8 +1088,8 @@ document.addEventListener("visibilitychange", function(){
     if (S.running){
       if (hiddenAt) seedDrips(Date.now() - hiddenAt);   // капли за время отсутствия
       if (remaining() <= 0) finish();
-      else syncSound();
     }
+    syncSound();          // возобновляем нужную дорожку: музыку или тикание финала
     hiddenAt = 0;
     renderTimer(true);
   }
@@ -1103,7 +1105,8 @@ window.addEventListener("pagehide", function(){
 layout();
 updateUI();
 paintSel();
-if (S.running){ seedDrips(catchupMs); syncSound(); }
+if (S.running) seedDrips(catchupMs);
+syncSound();   // если свеча догорела, пока приложение было закрыто, — сразу тикание
 requestAnimationFrame(function(t){ prev = t; loop(t); });
 </script>
 </body>
