@@ -6,9 +6,6 @@
 <meta name="theme-color" content="#0b1026">
 <title>СВЕЧА</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0b1026;
@@ -26,7 +23,9 @@
   body{
     background:var(--bg);
     color:var(--ink);
-    font-family:"Pixelify Sans","Courier New",monospace;
+    /* Никаких внешних шрифтов: в Pixelify Sans кириллическая «С» читается как «О»
+       («ОТАРТ» вместо «СТАРТ»). Моноширинный системный шрифт рисует буквы верно. */
+    font-family:ui-monospace,"Cascadia Mono","Segoe UI Mono","Courier New",Courier,monospace;
     font-weight:700;
     letter-spacing:.06em;
     display:flex;
@@ -116,6 +115,7 @@
     align-items:center;
     justify-content:center;
     padding:16px;
+    overflow-y:auto;            /* чтобы экранная клавиатура не перекрывала кнопку ОК */
     z-index:50;
   }
   .modal.open{display:flex}
@@ -132,30 +132,37 @@
   }
   .sheet h2{font-size:14px;letter-spacing:.16em;text-align:center;color:var(--ink-dim);font-weight:700}
 
-  /* ролики времени */
-  #rollers{display:flex;justify-content:center;align-items:center;gap:6px}
-  .roller{
-    width:74px;height:150px;
-    overflow-y:scroll;
-    scroll-snap-type:y mandatory;
+  /* поля ввода времени */
+  #fields{display:flex;justify-content:center;align-items:flex-start;gap:6px}
+  .fieldWrap{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1 1 0;min-width:0}
+  .fieldWrap > span{font-size:10px;color:var(--ink-dim);letter-spacing:.14em}
+  .num{
+    width:100%;
     border:3px solid var(--panel-hi);
     background:var(--panel-lo);
-    scrollbar-width:none;
-    position:relative;
+    color:var(--accent);
+    font:inherit;
+    font-size:30px;
+    font-weight:700;
+    text-align:center;
+    padding:10px 0;
+    -moz-appearance:textfield;
+    outline:none;
   }
-  .roller::-webkit-scrollbar{display:none}
-  .roller .pad{height:50px}
-  .roller .it{
-    height:50px;
-    scroll-snap-align:center;
-    display:flex;align-items:center;justify-content:center;
-    font-size:26px;
-    color:#4d5b96;
+  .num::-webkit-outer-spin-button,.num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .num:focus{border-color:var(--accent);background:#0d1436}
+  .stepRow{display:flex;gap:5px;width:100%}
+  .step{
+    flex:1 1 0;
+    border:3px solid var(--panel-hi);
+    background:var(--panel);
+    color:var(--ink);
+    font:inherit;font-size:17px;font-weight:700;
+    padding:6px 0;cursor:pointer;
+    box-shadow:inset -2px -2px 0 var(--panel-lo);
   }
-  .roller .it.sel{color:var(--accent)}
-  .rollWrap{display:flex;flex-direction:column;align-items:center;gap:5px}
-  .rollWrap span{font-size:10px;color:var(--ink-dim);letter-spacing:.14em}
-  .colon{font-size:24px;color:var(--panel-hi);padding-bottom:18px}
+  .step:active{transform:translateY(2px)}
+  .colon{font-size:26px;color:var(--panel-hi);padding-top:14px;flex:0 0 auto}
 
   /* палитра */
   #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -259,12 +266,24 @@
 <div class="modal" id="mTime">
   <div class="sheet">
     <h2>ВРЕМЯ ГОРЕНИЯ</h2>
-    <div id="rollers">
-      <div class="rollWrap"><div class="roller" id="rH"></div><span>ЧАСЫ</span></div>
+    <div id="fields">
+      <div class="fieldWrap">
+        <input class="num" id="fH" type="text" inputmode="numeric" maxlength="2" value="00" aria-label="Часы">
+        <div class="stepRow"><button class="step" data-f="fH" data-d="-1">−</button><button class="step" data-f="fH" data-d="1">+</button></div>
+        <span>ЧАСЫ</span>
+      </div>
       <div class="colon">:</div>
-      <div class="rollWrap"><div class="roller" id="rM"></div><span>МИН</span></div>
+      <div class="fieldWrap">
+        <input class="num" id="fM" type="text" inputmode="numeric" maxlength="2" value="10" aria-label="Минуты">
+        <div class="stepRow"><button class="step" data-f="fM" data-d="-1">−</button><button class="step" data-f="fM" data-d="1">+</button></div>
+        <span>МИН</span>
+      </div>
       <div class="colon">:</div>
-      <div class="rollWrap"><div class="roller" id="rS"></div><span>СЕК</span></div>
+      <div class="fieldWrap">
+        <input class="num" id="fS" type="text" inputmode="numeric" maxlength="2" value="00" aria-label="Секунды">
+        <div class="stepRow"><button class="step" data-f="fS" data-d="-1">−</button><button class="step" data-f="fS" data-d="1">+</button></div>
+        <span>СЕК</span>
+      </div>
     </div>
     <div class="row">
       <button class="btn" id="timeCancel">ОТМЕНА</button>
@@ -282,7 +301,9 @@
   </div>
 </div>
 
-<audio id="snd" loop preload="auto" src="audio/candle.mp3"></audio>
+<!-- Оба звука идут по кругу, пока свеча горит. Громкость — ниже, в блоке «ЗВУК». -->
+<audio id="snd"  loop preload="auto" src="audio/candle.mp3"></audio>
+<audio id="tick" loop preload="auto" src="audio/tick.mp3"></audio>
 
 <script>
 "use strict";
@@ -429,15 +450,29 @@ function frac(){ // 1 = целая свеча, 0 = догорела
 /* ==========================================================
    4. ЗВУК
    ========================================================== */
-var snd = document.getElementById("snd");
+var snd  = document.getElementById("snd");    // музыка
+var tick = document.getElementById("tick");   // тикание, пока свеча горит и течёт
 var audioBlocked = false;
-snd.volume = 0.55;
+
+// НАСТРОЙКА ГРОМКОСТИ: 0 — выключено совсем, 1 — максимум.
+snd.volume  = 0.40;   // музыка потише, чтобы не спорила с тиканьем
+tick.volume = 0.55;   // тикание
+
+var TRACKS = [snd, tick];
 function syncSound(){
-  if (S.sound && S.running && !S.finished){
-    var p = snd.play();
-    if (p && p.catch) p.catch(function(){ audioBlocked = true; showHint("НАЖМИ ЛЮБУЮ КНОПКУ ДЛЯ ЗВУКА"); });
-  } else {
-    try{ snd.pause(); }catch(e){}
+  var on = S.sound && S.running && !S.finished;
+  for (var i = 0; i < TRACKS.length; i++){
+    var a = TRACKS[i];
+    if (on){
+      if (a.volume <= 0) continue;            // дорожку с громкостью 0 не трогаем
+      var p = a.play();
+      if (p && p.catch) p.catch(function(){
+        audioBlocked = true;
+        showHint("НАЖМИ ЛЮБУЮ КНОПКУ ДЛЯ ЗВУКА");
+      });
+    } else {
+      try{ a.pause(); }catch(e){}
+    }
   }
 }
 document.addEventListener("pointerdown", function once(){
@@ -924,60 +959,89 @@ document.getElementById("btnSound").addEventListener("click", function(){
 });
 
 /* ==========================================================
-   10. РОЛИКИ ВРЕМЕНИ
+   10. ВВОД ВРЕМЕНИ (часы / минуты / секунды с клавиатуры)
    ========================================================== */
-var ITEM_H = 50;
-function buildRoller(el, max){
-  var html = '<div class="pad"></div>';
-  for (var i = 0; i <= max; i++){
-    html += '<div class="it">' + (i < 10 ? "0" + i : i) + '</div>';
-  }
-  html += '<div class="pad"></div>';
-  el.innerHTML = html;
-  var t = 0;
-  el.addEventListener("scroll", function(){
-    clearTimeout(t);
-    t = setTimeout(function(){ markRoller(el); }, 90);
-    markRoller(el);
-  }, {passive:true});
-}
-function rollerVal(el){
-  return Math.max(0, Math.round(el.scrollTop / ITEM_H));
-}
-function markRoller(el){
-  var v = rollerVal(el);
-  var items = el.querySelectorAll(".it");
-  for (var i = 0; i < items.length; i++){
-    items[i].classList.toggle("sel", i === v);
-  }
-}
-function setRoller(el, v){
-  el.scrollTop = v * ITEM_H;
-  markRoller(el);
-}
-var rH = document.getElementById("rH"), rM = document.getElementById("rM"), rS = document.getElementById("rS");
-buildRoller(rH, 23); buildRoller(rM, 59); buildRoller(rS, 59);
+var fH = document.getElementById("fH");
+var fM = document.getElementById("fM");
+var fS = document.getElementById("fS");
+var FIELDS = { fH:{el:fH, max:23, next:null}, fM:{el:fM, max:59, next:null}, fS:{el:fS, max:59, next:null} };
+FIELDS.fH.next = fM;
+FIELDS.fM.next = fS;
 
-var mTime = document.getElementById("mTime");
-document.getElementById("btnTime").addEventListener("click", function(){
-  var s = Math.floor(S.totalMs / 1000);
-  mTime.classList.add("open");
-  haptic("light");
-  // scrollTop работает только когда элемент видим
-  requestAnimationFrame(function(){
-    setRoller(rH, Math.floor(s / 3600));
-    setRoller(rM, Math.floor((s % 3600) / 60));
-    setRoller(rS, s % 60);
+function pad2(v){ return (v < 10 ? "0" : "") + v; }
+function fieldVal(el, max){
+  var v = parseInt(el.value.replace(/\D/g, ""), 10);
+  if (!isFinite(v) || v < 0) v = 0;
+  if (v > max) v = max;
+  return v;
+}
+function setField(el, max, v){
+  if (v < 0) v = 0;
+  if (v > max) v = max;
+  el.value = pad2(v);
+}
+
+Object.keys(FIELDS).forEach(function(key){
+  var f = FIELDS[key];
+  var el = f.el;
+
+  // выделяем всё при касании — сразу можно набирать поверх.
+  // Строго синхронно: с setTimeout выделение срабатывало уже во время набора и съедало цифры.
+  el.addEventListener("focus", function(){ try{ el.select(); }catch(e){} });
+
+  el.addEventListener("input", function(){
+    var raw = el.value.replace(/\D/g, "").slice(0, 2);
+    el.value = raw;
+    // набрал две цифры — прыгаем в следующее поле
+    if (raw.length === 2){
+      if (parseInt(raw, 10) > f.max) el.value = pad2(f.max);
+      if (f.next) f.next.focus();
+    }
+  });
+
+  el.addEventListener("blur", function(){ setField(el, f.max, fieldVal(el, f.max)); });
+
+  el.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ el.blur(); applyTime(); }
+    // стрелки вверх/вниз — как в обычном поле со счётчиком
+    if (e.key === "ArrowUp"  ){ e.preventDefault(); setField(el, f.max, fieldVal(el, f.max) + 1); }
+    if (e.key === "ArrowDown"){ e.preventDefault(); setField(el, f.max, fieldVal(el, f.max) - 1); }
   });
 });
-document.getElementById("timeCancel").addEventListener("click", function(){ mTime.classList.remove("open"); });
-document.getElementById("timeOk").addEventListener("click", function(){
-  var total = (rollerVal(rH) * 3600 + rollerVal(rM) * 60 + rollerVal(rS)) * 1000;
-  if (total < 1000){ showHint("ВЫБЕРИ ХОТЯ БЫ 1 СЕКУНДУ"); return; }
+
+// кнопки − и + под каждым полем
+var steps = document.querySelectorAll(".step");
+for (var si = 0; si < steps.length; si++){
+  steps[si].addEventListener("click", function(){
+    var f = FIELDS[this.getAttribute("data-f")];
+    var d = parseInt(this.getAttribute("data-d"), 10);
+    setField(f.el, f.max, fieldVal(f.el, f.max) + d);
+    haptic("light");
+  });
+}
+
+var mTime = document.getElementById("mTime");
+function applyTime(){
+  var total = (fieldVal(fH, 23) * 3600 + fieldVal(fM, 59) * 60 + fieldVal(fS, 59)) * 1000;
+  if (total < 1000){ showHint("ВВЕДИ ХОТЯ БЫ 1 СЕКУНДУ"); return; }
   S.totalMs = total;
   mTime.classList.remove("open");
   resetAll();
+}
+
+document.getElementById("btnTime").addEventListener("click", function(){
+  var s = Math.floor(S.totalMs / 1000);
+  setField(fH, 23, Math.floor(s / 3600));
+  setField(fM, 59, Math.floor((s % 3600) / 60));
+  setField(fS, 59, s % 60);
+  mTime.classList.add("open");
+  haptic("light");
 });
+document.getElementById("timeCancel").addEventListener("click", function(){
+  document.activeElement && document.activeElement.blur();
+  mTime.classList.remove("open");
+});
+document.getElementById("timeOk").addEventListener("click", applyTime);
 mTime.addEventListener("click", function(e){ if (e.target === mTime) mTime.classList.remove("open"); });
 
 /* ==========================================================
@@ -1016,7 +1080,7 @@ document.addEventListener("visibilitychange", function(){
     hiddenAt = Date.now();
     if (S.running) S.remainMs = remaining();
     save();
-    try{ snd.pause(); }catch(e){}
+    for (var ti = 0; ti < TRACKS.length; ti++){ try{ TRACKS[ti].pause(); }catch(e){} }
   } else {
     // ГОРИТ ПО РЕАЛЬНЫМ ЧАСАМ: догоняем всё, что прошло, пока приложение было закрыто
     if (S.running){
