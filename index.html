@@ -387,6 +387,7 @@ var S = {
   colorIdx: 1,
   sound: true
 };
+var catchupMs = 0;   // время горения, прошедшее вне приложения
 function save(){
   try{ localStorage.setItem(SKEY, JSON.stringify(S)); }catch(e){}
 }
@@ -407,7 +408,9 @@ function load(){
     S.sound    = (o.sound === undefined) ? true : !!o.sound;
     // ГОРИТ ПО РЕАЛЬНЫМ ЧАСАМ: пересчитываем остаток от момента окончания
     if (S.running){
+      var was = S.remainMs;
       S.remainMs = Math.max(0, S.endAt - Date.now());
+      catchupMs = Math.max(0, was - S.remainMs);   // сколько сгорело, пока нас не было
       if (S.remainMs <= 0){ S.running = false; S.finished = true; S.remainMs = 0; }
     }
   }catch(e){}
@@ -491,6 +494,10 @@ function layout(force){
 
   var fs = Math.max(2, Math.floor(Math.min(window.innerWidth * 0.86, 380) / FW));
   fitCanvas(fcv, fcx, FW, FH, fs);
+
+  // смена размера очищает канвас таймера — обязательно перерисовать,
+  // иначе на паузе цифры пропадут до следующей смены секунды
+  renderTimer(true);
 }
 window.addEventListener("resize", function(){ layout(); });
 window.addEventListener("orientationchange", function(){ setTimeout(function(){ layout(true); }, 150); });
@@ -519,7 +526,17 @@ function recalcGeometry(){
 function topY(){ return Math.round(BASE_Y - FULL_H * frac()); }
 
 /* ---------- КАПЛИ ВОСКА ---------- */
-var drips = [];   // {x, y, len, v, frozen, side}
+// НАСТРОЙКА: как часто срывается новая капля. 5 минут = 5*60*1000.
+var DRIP_EVERY_MS = 5 * 60 * 1000;
+
+var drips = [];   // {x, y, len, v, frozen}
+var dripTimer = 0;
+var nextDripAt = DRIP_EVERY_MS;
+function planNextDrip(){
+  // ±15%, чтобы капли не падали как по метроному
+  nextDripAt = DRIP_EVERY_MS * (0.85 + Math.random() * 0.30);
+}
+planNextDrip();
 function spawnDrip(ty){
   if (ty + 4 >= BASE_Y) return;          // свече уже некуда течь
   var side = Math.random() < 0.5 ? 0 : 1;
@@ -542,7 +559,34 @@ function updateDrips(dt, burning){
       if (d.y + d.len >= BASE_Y){ d.len = Math.max(1, BASE_Y - d.y); d.frozen = true; }
     }
   }
-  if (burning && Math.random() < dt * 0.0016) spawnDrip(ty);
+  // одна капля раз в DRIP_EVERY_MS горения
+  if (burning){
+    dripTimer += dt;
+    if (dripTimer >= nextDripAt){
+      dripTimer = 0;
+      planNextDrip();
+      spawnDrip(ty);
+    }
+  }
+}
+
+// Капли, «натёкшие», пока приложение было закрыто или свёрнуто.
+// Сразу застывшие — они уже стекли без нас.
+function seedDrips(elapsedMs){
+  var n = Math.min(5, Math.floor(elapsedMs / DRIP_EVERY_MS));
+  for (var i = 0; i < n; i++){
+    var ty = topY();
+    if (ty + 8 >= BASE_Y) return;
+    var side = Math.random() < 0.5 ? 0 : 1;
+    var x = side === 0
+          ? BODY_X + 1 + Math.floor(Math.random()*3)
+          : BODY_X + BODY_W - 3 - Math.floor(Math.random()*3);
+    var y = ty + 2 + Math.floor(Math.random()*8);
+    var room = BASE_Y - y - 1;
+    if (room < 4) continue;
+    drips.push({ x:x, y:y, len:Math.min(room, 6 + Math.random()*28),
+                 v:0.15, stopAt:0, frozen:true });
+  }
 }
 
 /* ---------- ДЫМ ---------- */
@@ -867,6 +911,8 @@ function resetAll(){
   S.endAt = 0;
   drips.length = 0;
   smoke.length = 0;
+  dripTimer = 0;
+  planNextDrip();
   save(); syncSound(); updateUI(); haptic("medium");
 }
 
@@ -964,17 +1010,21 @@ mColor.addEventListener("click", function(e){ if (e.target === mColor) mColor.cl
 /* ==========================================================
    12. ФОН / ВОЗВРАТ В ПРИЛОЖЕНИЕ
    ========================================================== */
+var hiddenAt = 0;
 document.addEventListener("visibilitychange", function(){
   if (document.hidden){
+    hiddenAt = Date.now();
     if (S.running) S.remainMs = remaining();
     save();
     try{ snd.pause(); }catch(e){}
   } else {
     // ГОРИТ ПО РЕАЛЬНЫМ ЧАСАМ: догоняем всё, что прошло, пока приложение было закрыто
     if (S.running){
+      if (hiddenAt) seedDrips(Date.now() - hiddenAt);   // капли за время отсутствия
       if (remaining() <= 0) finish();
       else syncSound();
     }
+    hiddenAt = 0;
     renderTimer(true);
   }
 });
@@ -989,7 +1039,7 @@ window.addEventListener("pagehide", function(){
 layout();
 updateUI();
 paintSel();
-if (S.running) syncSound();
+if (S.running){ seedDrips(catchupMs); syncSound(); }
 requestAnimationFrame(function(t){ prev = t; loop(t); });
 </script>
 </body>
