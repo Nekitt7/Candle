@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1026">
+<title>СВЕЧА</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1026;
+    --bg2:#121a3d;
+    --panel:#182353;
+    --panel-hi:#28357a;
+    --panel-lo:#0a0f2a;
+    --ink:#cdd8ff;
+    --ink-dim:#7c8ac4;
+    --accent:#ffb43c;
+    --danger:#ff5b5b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Pixelify Sans","Courier New",monospace;
+    font-weight:700;
+    letter-spacing:.06em;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    user-select:none;
+    -webkit-user-select:none;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+
+  /* ---------- ВЕРХ: ТАЙМЕР ---------- */
+  #topbar{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    padding:10px 12px 6px;
+    flex:0 0 auto;
+  }
+  #timerFrame{
+    border:3px solid var(--panel-hi);
+    background:var(--panel-lo);
+    padding:7px 12px;
+    box-shadow:0 0 0 3px var(--bg), 0 0 18px rgba(255,180,60,.10);
+  }
+  #label{font-size:11px;color:var(--ink-dim);letter-spacing:.18em}
+
+  /* ---------- ЦЕНТР: СВЕЧА ---------- */
+  #stage{
+    flex:1 1 0;
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:0;
+    overflow:hidden;
+    position:relative;
+  }
+
+  /* ---------- НИЗ: КНОПКИ ---------- */
+  #controls{
+    flex:0 0 auto;
+    width:100%;
+    max-width:460px;
+    padding:8px 12px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .row{display:flex;gap:clamp(5px,1.8vw,8px)}
+  .btn{
+    flex:1 1 0;
+    min-width:0;
+    overflow:hidden;
+    border:3px solid var(--panel-hi);
+    background:var(--panel);
+    color:var(--ink);
+    font:inherit;
+    font-size:clamp(11px,3.6vw,15px);
+    letter-spacing:.08em;
+    padding:12px 4px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:clamp(4px,1.6vw,8px);
+    white-space:nowrap;
+    box-shadow:inset -3px -3px 0 var(--panel-lo), inset 3px 3px 0 var(--panel-hi);
+    transition:transform .04s;
+  }
+  .btn span{overflow:hidden;min-width:0}
+  .btn:active{transform:translateY(2px);box-shadow:inset 3px 3px 0 var(--panel-lo)}
+  .btn.primary{background:#20306e;border-color:#3c4fa8}
+  .btn.icon{flex:1 1 0;padding:10px 4px}
+  #btnTime{flex:1.35 1 0}
+  #timeLabel{letter-spacing:.01em}
+  .btn svg{width:clamp(19px,5.4vw,26px);height:clamp(19px,5.4vw,26px);shape-rendering:crispEdges;flex:0 0 auto}
+  .btn.off{opacity:.45}
+
+  /* ---------- МОДАЛКИ ---------- */
+  .modal{
+    position:fixed;inset:0;
+    background:rgba(5,8,22,.86);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    z-index:50;
+  }
+  .modal.open{display:flex}
+  .sheet{
+    width:100%;
+    max-width:360px;
+    background:var(--bg2);
+    border:3px solid var(--panel-hi);
+    box-shadow:inset -3px -3px 0 var(--panel-lo), inset 3px 3px 0 #3c4fa8;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .sheet h2{font-size:14px;letter-spacing:.16em;text-align:center;color:var(--ink-dim);font-weight:700}
+
+  /* ролики времени */
+  #rollers{display:flex;justify-content:center;align-items:center;gap:6px}
+  .roller{
+    width:74px;height:150px;
+    overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    border:3px solid var(--panel-hi);
+    background:var(--panel-lo);
+    scrollbar-width:none;
+    position:relative;
+  }
+  .roller::-webkit-scrollbar{display:none}
+  .roller .pad{height:50px}
+  .roller .it{
+    height:50px;
+    scroll-snap-align:center;
+    display:flex;align-items:center;justify-content:center;
+    font-size:26px;
+    color:#4d5b96;
+  }
+  .roller .it.sel{color:var(--accent)}
+  .rollWrap{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .rollWrap span{font-size:10px;color:var(--ink-dim);letter-spacing:.14em}
+  .colon{font-size:24px;color:var(--panel-hi);padding-bottom:18px}
+
+  /* палитра */
+  #palette{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .sw{
+    aspect-ratio:1/1;
+    border:3px solid var(--panel-lo);
+    cursor:pointer;
+    box-shadow:inset -3px -3px 0 rgba(0,0,0,.35), inset 3px 3px 0 rgba(255,255,255,.25);
+  }
+  .sw.sel{border-color:#fff;box-shadow:0 0 0 3px var(--accent), inset -3px -3px 0 rgba(0,0,0,.35)}
+
+  /* финальный экран */
+  #final{
+    position:absolute;inset:0;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:20px;
+    background:rgba(5,8,22,.55);
+    z-index:20;
+  }
+  #final.open{display:flex}
+  #finalBtn{
+    border:3px solid var(--accent);
+    background:#20306e;
+    color:var(--accent);
+    font:inherit;font-size:15px;letter-spacing:.1em;
+    padding:12px 22px;cursor:pointer;
+    box-shadow:inset -3px -3px 0 var(--panel-lo);
+  }
+  #finalBtn:active{transform:translateY(2px)}
+  #hint{font-size:10px;color:var(--ink-dim);text-align:center;letter-spacing:.1em;min-height:12px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="label">ОСТАЛОСЬ ГОРЕТЬ</div>
+  <div id="timerFrame"><canvas id="timerCanvas"></canvas></div>
+</div>
+
+<div id="stage">
+  <canvas id="candleCanvas"></canvas>
+  <div id="final">
+    <canvas id="finalCanvas"></canvas>
+    <button id="finalBtn">НАЧАТЬ ЗАНОВО</button>
+  </div>
+</div>
+
+<div id="controls">
+  <div class="row">
+    <button class="btn primary" id="btnStart">СТАРТ</button>
+    <button class="btn" id="btnReset">ЗАНОВО</button>
+  </div>
+  <div class="row">
+    <button class="btn icon" id="btnTime" aria-label="Время">
+      <svg viewBox="0 0 16 16"><g fill="#cdd8ff">
+        <rect x="5" y="0" width="6" height="1"/><rect x="3" y="1" width="2" height="1"/><rect x="11" y="1" width="2" height="1"/>
+        <rect x="2" y="2" width="1" height="1"/><rect x="13" y="2" width="1" height="1"/>
+        <rect x="1" y="3" width="1" height="2"/><rect x="14" y="3" width="1" height="2"/>
+        <rect x="0" y="5" width="1" height="6"/><rect x="15" y="5" width="1" height="6"/>
+        <rect x="1" y="11" width="1" height="2"/><rect x="14" y="11" width="1" height="2"/>
+        <rect x="2" y="13" width="1" height="1"/><rect x="13" y="13" width="1" height="1"/>
+        <rect x="3" y="14" width="2" height="1"/><rect x="11" y="14" width="2" height="1"/>
+        <rect x="5" y="15" width="6" height="1"/>
+      </g><g fill="#ffb43c">
+        <rect x="7" y="4" width="2" height="5"/><rect x="9" y="8" width="3" height="2"/>
+      </g></svg>
+      <span id="timeLabel">00:10:00</span>
+    </button>
+    <button class="btn icon" id="btnColor" aria-label="Цвет">
+      <svg viewBox="0 0 16 16"><g>
+        <rect x="4" y="1" width="8" height="1" fill="#cdd8ff"/>
+        <rect x="2" y="2" width="2" height="1" fill="#cdd8ff"/><rect x="12" y="2" width="2" height="1" fill="#cdd8ff"/>
+        <rect x="1" y="3" width="1" height="3" fill="#cdd8ff"/><rect x="14" y="3" width="1" height="4" fill="#cdd8ff"/>
+        <rect x="1" y="6" width="1" height="4" fill="#cdd8ff"/><rect x="2" y="10" width="1" height="2" fill="#cdd8ff"/>
+        <rect x="3" y="12" width="2" height="1" fill="#cdd8ff"/><rect x="5" y="13" width="3" height="1" fill="#cdd8ff"/>
+        <rect x="8" y="12" width="3" height="1" fill="#cdd8ff"/><rect x="11" y="10" width="3" height="2" fill="#cdd8ff"/>
+        <rect x="4" y="4" width="2" height="2" fill="#ff5b5b"/>
+        <rect x="8" y="3" width="2" height="2" fill="#ffb43c"/>
+        <rect x="11" y="5" width="2" height="2" fill="#5bd6ff"/>
+        <rect x="3" y="8" width="2" height="2" fill="#7bf07b"/>
+      </g></svg>
+      <span>ЦВЕТ</span>
+    </button>
+    <button class="btn icon" id="btnSound" aria-label="Звук">
+      <svg viewBox="0 0 16 16"><g fill="#cdd8ff">
+        <rect x="2" y="6" width="2" height="4"/><rect x="4" y="5" width="2" height="6"/>
+        <rect x="6" y="3" width="2" height="10"/>
+        <g id="waves"><rect x="9" y="5" width="1" height="6"/><rect x="11" y="3" width="1" height="10"/></g>
+        <g id="cross" style="display:none"><rect x="9" y="5" width="1" height="1"/><rect x="10" y="6" width="1" height="1"/><rect x="11" y="7" width="1" height="1"/><rect x="12" y="8" width="1" height="1"/><rect x="13" y="9" width="1" height="1"/><rect x="13" y="5" width="1" height="1"/><rect x="12" y="6" width="1" height="1"/><rect x="10" y="8" width="1" height="1"/><rect x="9" y="9" width="1" height="1"/></g>
+      </g></svg>
+      <span id="soundLabel">ЗВУК</span>
+    </button>
+  </div>
+  <div id="hint"></div>
+</div>
+
+<!-- модалка времени -->
+<div class="modal" id="mTime">
+  <div class="sheet">
+    <h2>ВРЕМЯ ГОРЕНИЯ</h2>
+    <div id="rollers">
+      <div class="rollWrap"><div class="roller" id="rH"></div><span>ЧАСЫ</span></div>
+      <div class="colon">:</div>
+      <div class="rollWrap"><div class="roller" id="rM"></div><span>МИН</span></div>
+      <div class="colon">:</div>
+      <div class="rollWrap"><div class="roller" id="rS"></div><span>СЕК</span></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="timeCancel">ОТМЕНА</button>
+      <button class="btn primary" id="timeOk">ОК</button>
+    </div>
+  </div>
+</div>
+
+<!-- модалка цвета -->
+<div class="modal" id="mColor">
+  <div class="sheet">
+    <h2>ЦВЕТ СВЕЧИ</h2>
+    <div id="palette"></div>
+    <button class="btn primary" id="colorOk">ГОТОВО</button>
+  </div>
+</div>
+
+<audio id="snd" loop preload="auto" src="audio/candle.mp3"></audio>
+
+<script>
+"use strict";
+
+/* ==========================================================
+   0. TELEGRAM
+   ========================================================== */
+var TG = null;
+try{
+  if (window.Telegram && window.Telegram.WebApp){
+    TG = window.Telegram.WebApp;
+    TG.ready();
+    TG.expand();
+    if (TG.setHeaderColor) TG.setHeaderColor("#0b1026");
+    if (TG.setBackgroundColor) TG.setBackgroundColor("#0b1026");
+    if (TG.disableVerticalSwipes) TG.disableVerticalSwipes();
+  }
+}catch(e){}
+function haptic(type){
+  try{ if (TG && TG.HapticFeedback) TG.HapticFeedback.impactOccurred(type || "light"); }catch(e){}
+}
+function hapticNotify(){
+  try{ if (TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred("warning"); }catch(e){}
+}
+
+/* ==========================================================
+   1. ПИКСЕЛЬНЫЙ ШРИФТ 5x7 (цифры + нужная кириллица)
+   ========================================================== */
+var FONT = {
+ '0':['01110','10001','10011','10101','11001','10001','01110'],
+ '1':['00100','01100','00100','00100','00100','00100','01110'],
+ '2':['01110','10001','00001','00010','00100','01000','11111'],
+ '3':['11111','00010','00100','00010','00001','10001','01110'],
+ '4':['00010','00110','01010','10010','11111','00010','00010'],
+ '5':['11111','10000','11110','00001','00001','10001','01110'],
+ '6':['00110','01000','10000','11110','10001','10001','01110'],
+ '7':['11111','00001','00010','00100','01000','01000','01000'],
+ '8':['01110','10001','10001','01110','10001','10001','01110'],
+ '9':['01110','10001','10001','01111','00001','00010','01100'],
+ ':':['00000','00100','00100','00000','00100','00100','00000'],
+ '?':['01110','10001','00001','00010','00100','00000','00100'],
+ ' ':['00000','00000','00000','00000','00000','00000','00000'],
+ 'Г':['11111','10000','10000','10000','10000','10000','10000'],
+ 'Д':['01110','01010','01010','01010','01010','11111','10001'],
+ 'Е':['11111','10000','10000','11110','10000','10000','11111'],
+ 'Н':['10001','10001','10001','11111','10001','10001','10001'],
+ 'Ь':['10000','10000','10000','11110','10001','10001','11110'],
+ 'И':['10001','10001','10011','10101','11001','10001','10001']
+};
+function textW(t, s){ return (t.length * 6 - 1) * s; }
+function drawText(ctx, t, x, y, s, color){
+  ctx.fillStyle = color;
+  for (var i = 0; i < t.length; i++){
+    var g = FONT[t[i]]; if (!g) continue;
+    for (var r = 0; r < 7; r++){
+      var row = g[r];
+      for (var c = 0; c < 5; c++){
+        if (row[c] === '1') ctx.fillRect(x + (i*6 + c)*s, y + r*s, s, s);
+      }
+    }
+  }
+}
+
+/* ==========================================================
+   2. ЦВЕТА
+   ========================================================== */
+var PALETTE = [
+  "#e8e2cf", // слоновая кость
+  "#ffd98a", // медовый
+  "#ffb43c", // янтарь
+  "#ff8a3c", // оранжевый
+  "#ff5b5b", // красный
+  "#ff7bc4", // розовый
+  "#c77bff", // фиолетовый
+  "#7b8cff", // сине-фиолетовый
+  "#5bd6ff", // голубой
+  "#5be3b0", // мятный
+  "#7bf07b", // зелёный
+  "#8a93b5"  // серый
+];
+function hex2rgb(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+function rgb2hex(r,g,b){
+  function p(v){ v = Math.max(0, Math.min(255, Math.round(v))); return (v<16?"0":"") + v.toString(16); }
+  return "#" + p(r) + p(g) + p(b);
+}
+function shade(hex, amt){ // amt -1..1
+  var c = hex2rgb(hex);
+  if (amt >= 0) return rgb2hex(c[0] + (255-c[0])*amt, c[1] + (255-c[1])*amt, c[2] + (255-c[2])*amt);
+  return rgb2hex(c[0]*(1+amt), c[1]*(1+amt), c[2]*(1+amt));
+}
+
+/* ==========================================================
+   3. СОСТОЯНИЕ
+   ========================================================== */
+var SKEY = "candle_state_v1";
+var S = {
+  totalMs: 10*60*1000,
+  remainMs: 10*60*1000,
+  running: false,
+  endAt: 0,
+  finished: false,
+  colorIdx: 1,
+  sound: true
+};
+function save(){
+  try{ localStorage.setItem(SKEY, JSON.stringify(S)); }catch(e){}
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(SKEY);
+    if (!raw) return;
+    var o = JSON.parse(raw);
+    if (!o || typeof o !== "object") return;
+    // ВАЖНО: метки времени НЕЛЬЗЯ приводить через |0 — это 32 бита, а Date.now() больше.
+    function num(v, def){ v = Number(v); return isFinite(v) ? v : def; }
+    S.totalMs  = Math.max(1000, num(o.totalMs, 600000));
+    S.remainMs = Math.max(0, num(o.remainMs, 0));
+    S.running  = !!o.running;
+    S.endAt    = num(o.endAt, 0);
+    S.finished = !!o.finished;
+    S.colorIdx = Math.min(PALETTE.length-1, Math.max(0, num(o.colorIdx, 1)|0));
+    S.sound    = (o.sound === undefined) ? true : !!o.sound;
+    // ГОРИТ ПО РЕАЛЬНЫМ ЧАСАМ: пересчитываем остаток от момента окончания
+    if (S.running){
+      S.remainMs = Math.max(0, S.endAt - Date.now());
+      if (S.remainMs <= 0){ S.running = false; S.finished = true; S.remainMs = 0; }
+    }
+  }catch(e){}
+}
+load();
+
+function remaining(){
+  if (S.running) return Math.max(0, S.endAt - Date.now());
+  return S.remainMs;
+}
+function frac(){ // 1 = целая свеча, 0 = догорела
+  if (S.totalMs <= 0) return 0;
+  return Math.max(0, Math.min(1, remaining() / S.totalMs));
+}
+
+/* ==========================================================
+   4. ЗВУК
+   ========================================================== */
+var snd = document.getElementById("snd");
+var audioBlocked = false;
+snd.volume = 0.55;
+function syncSound(){
+  if (S.sound && S.running && !S.finished){
+    var p = snd.play();
+    if (p && p.catch) p.catch(function(){ audioBlocked = true; showHint("НАЖМИ ЛЮБУЮ КНОПКУ ДЛЯ ЗВУКА"); });
+  } else {
+    try{ snd.pause(); }catch(e){}
+  }
+}
+document.addEventListener("pointerdown", function once(){
+  if (audioBlocked){ audioBlocked = false; syncSound(); showHint(""); }
+}, {passive:true});
+
+var hintT = 0;
+function showHint(t){
+  var h = document.getElementById("hint");
+  h.textContent = t;
+  clearTimeout(hintT);
+  if (t) hintT = setTimeout(function(){ h.textContent = ""; }, 4000);
+}
+
+/* ==========================================================
+   5. CANVAS / МАСШТАБ
+   ========================================================== */
+var LW = 100, LH = 180;           // логическая сетка свечи (LH считается под экран)
+var TW = 52,  TH = 9;             // логическая сетка таймера
+var FW = 72,  FH = 20;            // логическая сетка финальной надписи
+
+var cv  = document.getElementById("candleCanvas"), cx  = cv.getContext("2d");
+var tcv = document.getElementById("timerCanvas"),  tcx = tcv.getContext("2d");
+var fcv = document.getElementById("finalCanvas"),  fcx = fcv.getContext("2d");
+var scale = 3;
+
+function fitCanvas(canvas, ctx, lw, lh, s){
+  canvas.width = lw * s;
+  canvas.height = lh * s;
+  canvas.style.width  = (lw * s) + "px";
+  canvas.style.height = (lh * s) + "px";
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+}
+var lastW = 0, lastH = 0;
+function layout(force){
+  var stage = document.getElementById("stage");
+  var w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  if (!force && w === lastW && h === lastH) return;
+  lastW = w; lastH = h;
+  // масштаб задаёт ширина: свеча занимает почти весь экран.
+  // высоту логической сетки подгоняем под экран, чтобы не оставалось пустых полей.
+  scale = Math.max(1, Math.min(
+            Math.floor((w - 6) / LW),
+            Math.floor((h - 6) / 150)
+          ));
+  LH = Math.max(150, Math.min(260, Math.floor((h - 6) / scale)));
+  recalcGeometry();
+  fitCanvas(cv, cx, LW, LH, scale);
+
+  var ts = Math.max(2, Math.floor(Math.min(window.innerWidth * 0.78, 300) / TW));
+  fitCanvas(tcv, tcx, TW, TH, ts);
+
+  var fs = Math.max(2, Math.floor(Math.min(window.innerWidth * 0.86, 380) / FW));
+  fitCanvas(fcv, fcx, FW, FH, fs);
+}
+window.addEventListener("resize", function(){ layout(); });
+window.addEventListener("orientationchange", function(){ setTimeout(function(){ layout(true); }, 150); });
+window.addEventListener("load", function(){ layout(true); });
+// экран в Telegram «устаканивается» не сразу — пересчитываем, когда реально изменился размер
+if (window.ResizeObserver){
+  new ResizeObserver(function(){ layout(); }).observe(document.getElementById("stage"));
+}
+try{ if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ layout(true); }); }catch(e){}
+if (TG && TG.onEvent){ try{ TG.onEvent("viewportChanged", function(){ layout(true); }); }catch(e){} }
+
+/* ==========================================================
+   6. ГЕОМЕТРИЯ СВЕЧИ
+   ========================================================== */
+var BODY_W = 40;                      // ширина тела свечи
+var BODY_X = Math.round((LW - BODY_W) / 2);
+var CENTER = Math.round(LW / 2);
+var BASE_Y = 160;                     // низ свечи (пересчитывается в layout)
+var TOP_MIN_Y = 24;                   // самый верх целой свечи
+var FULL_H = BASE_Y - TOP_MIN_Y;
+
+function recalcGeometry(){
+  BASE_Y = LH - 18;
+  FULL_H = BASE_Y - TOP_MIN_Y;
+}
+function topY(){ return Math.round(BASE_Y - FULL_H * frac()); }
+
+/* ---------- КАПЛИ ВОСКА ---------- */
+var drips = [];   // {x, y, len, v, frozen, side}
+function spawnDrip(ty){
+  if (ty + 4 >= BASE_Y) return;          // свече уже некуда течь
+  var side = Math.random() < 0.5 ? 0 : 1;
+  var x = side === 0
+        ? BODY_X + 1 + Math.floor(Math.random()*3)
+        : BODY_X + BODY_W - 3 - Math.floor(Math.random()*3);
+  drips.push({ x:x, y:ty + 2, len:1, v:0.10 + Math.random()*0.16,
+               stopAt: 8 + Math.random()*46, frozen:false });
+  if (drips.length > 26) drips.shift();
+}
+function updateDrips(dt, burning){
+  var ty = topY();
+  for (var i = drips.length - 1; i >= 0; i--){
+    var d = drips[i];
+    if (d.y < ty - 1){ drips.splice(i,1); continue; }   // свеча сгорела ниже капли
+    if (d.y >= BASE_Y - 1){ drips.splice(i,1); continue; }
+    if (!d.frozen){
+      d.len += d.v * dt * 0.06;
+      if (d.len >= d.stopAt) d.frozen = true;
+      if (d.y + d.len >= BASE_Y){ d.len = Math.max(1, BASE_Y - d.y); d.frozen = true; }
+    }
+  }
+  if (burning && Math.random() < dt * 0.0016) spawnDrip(ty);
+}
+
+/* ---------- ДЫМ ---------- */
+var smoke = [];
+function spawnSmoke(x, y){
+  smoke.push({ x:x, y:y, vx:(Math.random()-0.5)*0.02, vy:-0.035 - Math.random()*0.03,
+               life:1, size: 1 + (Math.random()*2|0) });
+}
+function updateSmoke(dt){
+  for (var i = smoke.length - 1; i >= 0; i--){
+    var p = smoke[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.x += Math.sin((p.y + i) * 0.18) * 0.012 * dt;
+    p.life -= dt * 0.00045;
+    if (p.life <= 0) smoke.splice(i,1);
+  }
+}
+
+/* ==========================================================
+   7. РИСОВАНИЕ
+   ========================================================== */
+function drawHolder(){
+  // блюдце-подсвечник
+  var y = BASE_Y;
+  cx.fillStyle = "#2b3568"; cx.fillRect(CENTER - 25, y,     50, 3);
+  cx.fillStyle = "#3d4a8c"; cx.fillRect(CENTER - 25, y,     50, 1);
+  cx.fillStyle = "#1d2550"; cx.fillRect(CENTER - 22, y + 3, 44, 4);
+  cx.fillStyle = "#141b3d"; cx.fillRect(CENTER - 18, y + 7, 36, 4);
+  cx.fillStyle = "#0e1433"; cx.fillRect(CENTER - 14, y + 11, 28, 3);
+}
+
+function drawBody(base){
+  var ty = topY();
+  if (ty >= BASE_Y) return;
+
+  var mid   = base;
+  var light = shade(base,  0.30);
+  var hi    = shade(base,  0.50);
+  var dark  = shade(base, -0.28);
+  var dark2 = shade(base, -0.46);
+
+  var h = BASE_Y - ty;
+
+  // основное тело
+  cx.fillStyle = mid;   cx.fillRect(BODY_X, ty, BODY_W, h);
+  // левая подсветка
+  cx.fillStyle = light; cx.fillRect(BODY_X + 2, ty, 4, h);
+  cx.fillStyle = hi;    cx.fillRect(BODY_X + 3, ty, 2, h);
+  // правая тень
+  cx.fillStyle = dark;  cx.fillRect(BODY_X + BODY_W - 6, ty, 6, h);
+  cx.fillStyle = dark2; cx.fillRect(BODY_X + BODY_W - 3, ty, 3, h);
+  // кромки
+  cx.fillStyle = dark2; cx.fillRect(BODY_X, ty, 1, h);
+  // вертикальные потёки-полосы (фактура воска)
+  cx.fillStyle = shade(base, -0.12);
+  cx.fillRect(BODY_X + 10, ty, 1, h);
+  cx.fillRect(BODY_X + 18, ty, 1, h);
+
+  // ---- оплавленная макушка (кратер) ----
+  cx.fillStyle = shade(base, 0.18);
+  cx.fillRect(BODY_X + 1, ty,     BODY_W - 2, 2);
+  cx.fillStyle = shade(base, 0.38);
+  cx.fillRect(BODY_X + 3, ty,     BODY_W - 6, 1);
+  cx.fillStyle = shade(base, -0.34);
+  cx.fillRect(CENTER - 6, ty + 1, 12, 2);           // углубление у фитиля
+  cx.fillStyle = shade(base, -0.18);
+  cx.fillRect(CENTER - 9, ty + 3, 18, 1);
+  cx.fillStyle = shade(base, 0.22);
+  cx.fillRect(BODY_X + 3, ty + 1, 2, 1);
+  cx.fillRect(BODY_X + BODY_W - 5, ty + 1, 2, 1);
+
+  // ---- капли ----
+  for (var i = 0; i < drips.length; i++){
+    var d = drips[i];
+    var L = Math.max(1, Math.round(d.len));
+    if (d.y > BASE_Y) continue;
+    var L2 = Math.min(L, BASE_Y - d.y);
+    if (L2 <= 0) continue;
+    cx.fillStyle = shade(base, -0.34);                 // тёмный контур капли
+    cx.fillRect(d.x - 1, d.y, 4, L2);
+    cx.fillStyle = shade(base, 0.26);                  // тело капли
+    cx.fillRect(d.x, d.y, 2, L2);
+    cx.fillStyle = shade(base, 0.55);                  // блик
+    cx.fillRect(d.x, d.y, 1, L2);
+    // утолщение на конце капли
+    cx.fillStyle = shade(base, -0.34);
+    cx.fillRect(d.x - 2, d.y + L2 - 3, 5, 3);
+    cx.fillStyle = shade(base, 0.34);
+    cx.fillRect(d.x - 1, d.y + L2 - 3, 3, 2);
+    cx.fillStyle = shade(base, 0.55);
+    cx.fillRect(d.x - 1, d.y + L2 - 3, 1, 1);
+  }
+}
+
+function drawWick(ty, lit){
+  cx.fillStyle = lit ? "#2a2018" : "#1a1a1a";
+  cx.fillRect(CENTER - 1, ty - 3, 2, 4);
+  if (lit){ cx.fillStyle = "#5a3a1a"; cx.fillRect(CENTER - 1, ty - 1, 2, 2); }
+  else { cx.fillStyle = "#0f0f14"; cx.fillRect(CENTER - 1, ty - 3, 2, 2); }
+}
+
+/* ---- пиксельное свечение: спрайт из ступенчатых кругов, рисуется один раз ---- */
+function makeGlowSprite(R, step, a, color){
+  var c = document.createElement("canvas");
+  c.width = R*2 + 1; c.height = R*2 + 1;
+  var g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = color;
+  for (var r = R; r >= 2; r -= step){
+    g.globalAlpha = a;
+    for (var dy = -r; dy <= r; dy++){
+      var hw = Math.floor(Math.sqrt(r*r - dy*dy));
+      g.fillRect(R - hw, R + dy, hw*2 + 1, 1);
+    }
+  }
+  return { cv:c, R:R };
+}
+var glowBig = null, glowSmall = null;
+function ensureGlow(){
+  if (!glowBig)   glowBig   = makeGlowSprite(42, 3, 0.0065, "#ffa63c");
+  if (!glowSmall) glowSmall = makeGlowSprite(15, 2, 0.030,  "#ffc247");
+}
+function blitGlow(sp, x, y, alpha){
+  cx.globalAlpha = alpha;
+  cx.drawImage(sp.cv, x - sp.R, y - sp.R);
+  cx.globalAlpha = 1;
+}
+
+// ширина пламени по строкам (сверху вниз), половина ширины
+var FLAME = [1,1,2,2,3,3,4,4,5,5,5,5,4,4,3,2];
+function drawFlame(ty, t){
+  ensureGlow();
+  var baseY = ty - 3;               // низ пламени = верх фитиля
+  var n = FLAME.length;
+  var topOfFlame = baseY - n;
+  var breath = Math.sin(t*0.0042) * 0.5 + Math.sin(t*0.0113) * 0.3;
+  var pulse  = Math.sin(t*0.005) * 0.5 + Math.sin(t*0.0173) * 0.25;
+  var mid    = topOfFlame + Math.round(n * 0.6);
+
+  // --- свечение вокруг (мягкие ступеньки, не квадраты) ---
+  blitGlow(glowBig,   CENTER, mid, 0.85 + pulse*0.15);
+  blitGlow(glowSmall, CENTER, mid, 0.90 + pulse*0.10);
+
+  for (var i = 0; i < n; i++){
+    var y = topOfFlame + i;
+    var tipness = 1 - (i / n);                       // 1 у кончика
+    // фитиль качает верхушку, низ почти неподвижен
+    var sway = Math.sin(t*0.0058 + i*0.55) * 2.4 * tipness
+             + Math.sin(t*0.0131 + i*0.31) * 1.2 * tipness
+             + breath * tipness;
+    var w = FLAME[i] + (i > 3 && i < n-2 && Math.sin(t*0.009 + i*1.7) > 0.75 ? 1 : 0);
+    var x = Math.round(CENTER + sway - w);
+
+    // внешний слой
+    cx.fillStyle = (i < 2) ? "#ff7a1a" : "#ff9a2a";
+    cx.fillRect(x, y, w*2, 1);
+    // средний
+    if (w >= 2){
+      cx.fillStyle = "#ffc247";
+      cx.fillRect(x + 1, y, w*2 - 2, 1);
+    }
+    // ядро
+    if (i >= 4 && w >= 3){
+      cx.fillStyle = (i >= 7) ? "#fff6c8" : "#ffe58a";
+      cx.fillRect(x + 2, y, w*2 - 4, 1);
+    }
+  }
+  // синяя база у фитиля
+  cx.globalAlpha = 0.8;
+  cx.fillStyle = "#6ec6ff";
+  cx.fillRect(CENTER - 2, baseY - 2, 4, 2);
+  cx.globalAlpha = 0.5;
+  cx.fillRect(CENTER - 3, baseY - 1, 6, 1);
+  cx.globalAlpha = 1;
+  // искры
+  if (Math.sin(t*0.0071) > 0.93){
+    cx.fillStyle = "#ffd98a";
+    cx.fillRect(CENTER + Math.round(Math.sin(t*0.02)*3), topOfFlame - 3, 1, 1);
+  }
+}
+
+function drawSmoke(){
+  for (var i = 0; i < smoke.length; i++){
+    var p = smoke[i];
+    cx.globalAlpha = Math.max(0, p.life) * 0.5;
+    cx.fillStyle = "#9fb0e0";
+    cx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+  }
+  cx.globalAlpha = 1;
+}
+
+function drawBackground(t, lit){
+  cx.fillStyle = "#0b1026";
+  cx.fillRect(0, 0, LW, LH);
+  // пиксельные «пылинки» фона
+  cx.fillStyle = "#17204a";
+  for (var i = 0; i < 22; i++){
+    var sx = (i * 37) % LW, sy = (i * 53) % (LH - 20);
+    cx.fillRect(sx, sy, 1, 1);
+  }
+}
+
+function render(t, dt){
+  var lit = S.running && !S.finished && remaining() > 0;
+  drawBackground(t, lit);
+  drawHolder();
+  drawBody(PALETTE[S.colorIdx]);
+  var ty = topY();
+  if (ty < BASE_Y){
+    drawWick(ty, lit);
+    if (lit) drawFlame(ty, t);
+  }
+  drawSmoke();
+}
+
+/* ---------- ТАЙМЕР ---------- */
+function fmt(ms){
+  var s = Math.ceil(ms / 1000);
+  var h = Math.floor(s / 3600); s -= h * 3600;
+  var m = Math.floor(s / 60);   s -= m * 60;
+  function p(v){ return (v < 10 ? "0" : "") + v; }
+  return p(h) + ":" + p(m) + ":" + p(s);
+}
+var lastTimerStr = "";
+function renderTimer(force){
+  var str = fmt(remaining());
+  if (str === lastTimerStr && !force) return;
+  lastTimerStr = str;
+  tcx.fillStyle = "#0a0f2a";
+  tcx.fillRect(0, 0, TW, TH);
+  var col = S.finished ? "#ff5b5b" : (S.running ? "#ffb43c" : "#7c8ac4");
+  drawText(tcx, str, Math.round((TW - textW(str,1)) / 2), 1, 1, col);
+}
+
+/* ---------- ФИНАЛЬНАЯ НАДПИСЬ ---------- */
+function renderFinal(t){
+  fcx.clearRect(0, 0, FW, FH);
+  var blink = Math.sin(t * 0.005) > -0.35;
+  if (!blink) return;
+  var l1 = "ГДЕ", l2 = "ДЕНЬГИ?";
+  var s = 1;
+  // тень
+  drawText(fcx, l1, Math.round((FW - textW(l1,s))/2) + 1, 2, s, "#5a0f0f");
+  drawText(fcx, l2, Math.round((FW - textW(l2,s))/2) + 1, 12, s, "#5a0f0f");
+  drawText(fcx, l1, Math.round((FW - textW(l1,s))/2), 1, s, "#ff5b5b");
+  drawText(fcx, l2, Math.round((FW - textW(l2,s))/2), 11, s, "#ffb43c");
+}
+
+/* ==========================================================
+   8. ГЛАВНЫЙ ЦИКЛ
+   ========================================================== */
+var prev = performance.now();
+var lastSave = 0;
+function loop(now){
+  var dt = Math.min(64, now - prev);
+  prev = now;
+
+  var burning = S.running && !S.finished;
+  if (burning && remaining() <= 0) finish();
+
+  updateDrips(dt, burning);
+  updateSmoke(dt);
+  render(now, dt);
+  renderTimer(false);
+  if (S.finished) renderFinal(now);
+
+  if (now - lastSave > 2000){
+    lastSave = now;
+    if (S.running) S.remainMs = remaining();
+    save();
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ==========================================================
+   9. ДЕЙСТВИЯ
+   ========================================================== */
+var btnStart = document.getElementById("btnStart");
+var finalBox = document.getElementById("final");
+
+function updateUI(){
+  btnStart.textContent = S.running ? "СТОП" : (S.finished ? "СТАРТ" : "СТАРТ");
+  btnStart.disabled = S.finished;
+  btnStart.style.opacity = S.finished ? .4 : 1;
+  finalBox.classList.toggle("open", S.finished);
+  document.getElementById("timeLabel").textContent = fmt(S.totalMs);
+  document.getElementById("soundLabel").textContent = S.sound ? "ЗВУК" : "ТИХО";
+  document.getElementById("btnSound").classList.toggle("off", !S.sound);
+  document.querySelector("#waves").style.display  = S.sound ? "" : "none";
+  document.querySelector("#cross").style.display  = S.sound ? "none" : "";
+  renderTimer(true);
+}
+
+function start(){
+  if (S.finished) return;
+  if (S.remainMs <= 0) return;
+  S.running = true;
+  S.endAt = Date.now() + S.remainMs;
+  save(); syncSound(); updateUI(); haptic("medium");
+}
+function stop(){
+  if (!S.running) return;
+  S.remainMs = remaining();
+  S.running = false;
+  save(); syncSound(); updateUI(); haptic("light");
+}
+function finish(){
+  S.running = false;
+  S.remainMs = 0;
+  S.finished = true;
+  // выпускаем дым из фитиля
+  var ty = topY();
+  for (var i = 0; i < 16; i++){
+    setTimeout(function(){ spawnSmoke(CENTER - 1 + (Math.random()*3|0), BASE_Y - 2); }, i * 90);
+  }
+  save(); syncSound(); updateUI(); hapticNotify();
+}
+function resetAll(){
+  S.remainMs = S.totalMs;
+  S.running = false;
+  S.finished = false;
+  S.endAt = 0;
+  drips.length = 0;
+  smoke.length = 0;
+  save(); syncSound(); updateUI(); haptic("medium");
+}
+
+btnStart.addEventListener("click", function(){ S.running ? stop() : start(); });
+document.getElementById("btnReset").addEventListener("click", resetAll);
+document.getElementById("finalBtn").addEventListener("click", resetAll);
+document.getElementById("btnSound").addEventListener("click", function(){
+  S.sound = !S.sound; save(); syncSound(); updateUI(); haptic("light");
+});
+
+/* ==========================================================
+   10. РОЛИКИ ВРЕМЕНИ
+   ========================================================== */
+var ITEM_H = 50;
+function buildRoller(el, max){
+  var html = '<div class="pad"></div>';
+  for (var i = 0; i <= max; i++){
+    html += '<div class="it">' + (i < 10 ? "0" + i : i) + '</div>';
+  }
+  html += '<div class="pad"></div>';
+  el.innerHTML = html;
+  var t = 0;
+  el.addEventListener("scroll", function(){
+    clearTimeout(t);
+    t = setTimeout(function(){ markRoller(el); }, 90);
+    markRoller(el);
+  }, {passive:true});
+}
+function rollerVal(el){
+  return Math.max(0, Math.round(el.scrollTop / ITEM_H));
+}
+function markRoller(el){
+  var v = rollerVal(el);
+  var items = el.querySelectorAll(".it");
+  for (var i = 0; i < items.length; i++){
+    items[i].classList.toggle("sel", i === v);
+  }
+}
+function setRoller(el, v){
+  el.scrollTop = v * ITEM_H;
+  markRoller(el);
+}
+var rH = document.getElementById("rH"), rM = document.getElementById("rM"), rS = document.getElementById("rS");
+buildRoller(rH, 23); buildRoller(rM, 59); buildRoller(rS, 59);
+
+var mTime = document.getElementById("mTime");
+document.getElementById("btnTime").addEventListener("click", function(){
+  var s = Math.floor(S.totalMs / 1000);
+  mTime.classList.add("open");
+  haptic("light");
+  // scrollTop работает только когда элемент видим
+  requestAnimationFrame(function(){
+    setRoller(rH, Math.floor(s / 3600));
+    setRoller(rM, Math.floor((s % 3600) / 60));
+    setRoller(rS, s % 60);
+  });
+});
+document.getElementById("timeCancel").addEventListener("click", function(){ mTime.classList.remove("open"); });
+document.getElementById("timeOk").addEventListener("click", function(){
+  var total = (rollerVal(rH) * 3600 + rollerVal(rM) * 60 + rollerVal(rS)) * 1000;
+  if (total < 1000){ showHint("ВЫБЕРИ ХОТЯ БЫ 1 СЕКУНДУ"); return; }
+  S.totalMs = total;
+  mTime.classList.remove("open");
+  resetAll();
+});
+mTime.addEventListener("click", function(e){ if (e.target === mTime) mTime.classList.remove("open"); });
+
+/* ==========================================================
+   11. ПАЛИТРА
+   ========================================================== */
+var mColor = document.getElementById("mColor");
+var pal = document.getElementById("palette");
+PALETTE.forEach(function(c, i){
+  var d = document.createElement("div");
+  d.className = "sw";
+  d.style.background = c;
+  d.addEventListener("click", function(){
+    S.colorIdx = i;
+    save();
+    paintSel();
+    haptic("light");
+  });
+  pal.appendChild(d);
+});
+function paintSel(){
+  var sws = pal.children;
+  for (var i = 0; i < sws.length; i++) sws[i].classList.toggle("sel", i === S.colorIdx);
+}
+document.getElementById("btnColor").addEventListener("click", function(){
+  paintSel(); mColor.classList.add("open"); haptic("light");
+});
+document.getElementById("colorOk").addEventListener("click", function(){ mColor.classList.remove("open"); });
+mColor.addEventListener("click", function(e){ if (e.target === mColor) mColor.classList.remove("open"); });
+
+/* ==========================================================
+   12. ФОН / ВОЗВРАТ В ПРИЛОЖЕНИЕ
+   ========================================================== */
+document.addEventListener("visibilitychange", function(){
+  if (document.hidden){
+    if (S.running) S.remainMs = remaining();
+    save();
+    try{ snd.pause(); }catch(e){}
+  } else {
+    // ГОРИТ ПО РЕАЛЬНЫМ ЧАСАМ: догоняем всё, что прошло, пока приложение было закрыто
+    if (S.running){
+      if (remaining() <= 0) finish();
+      else syncSound();
+    }
+    renderTimer(true);
+  }
+});
+window.addEventListener("pagehide", function(){
+  if (S.running) S.remainMs = remaining();
+  save();
+});
+
+/* ==========================================================
+   13. СТАРТ
+   ========================================================== */
+layout();
+updateUI();
+paintSel();
+if (S.running) syncSound();
+requestAnimationFrame(function(t){ prev = t; loop(t); });
+</script>
+</body>
+</html>
